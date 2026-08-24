@@ -12,7 +12,7 @@ Switch modes with the tabs at the top.
 | --- | --- |
 | **Name Note** | A red dot appears somewhere on the neck — open string or fretted. Tap the matching note on the pad. |
 | **Find Note** | A note name is shown. Tap any position on the neck that plays it. |
-| **Explore** | Free practice — tap any position to reveal its note, or show the whole neck at once. |
+| **Explore** | Free practice — tap any position to reveal its note, or show the whole neck at once. With a scale selected it draws the scale, roots in red. |
 
 ### Sessions
 
@@ -20,6 +20,30 @@ Press **Start** to begin a session. It runs for 10 notes and the counter tracks
 your score (`3/10`). A correct answer turns green and moves on; a wrong one shows
 the right answer before continuing. After 10 notes the session ends and **Start**
 begins a new one. Your best result per mode is kept in `localStorage`.
+
+## Practice settings
+
+The sliders button in the top right opens the settings sheet. Everything there
+filters the pool of positions the app draws from, so the three modes all follow
+it. Positions the filters exclude are greyed out on the neck and cannot be
+tapped. Settings are remembered in `localStorage`.
+
+| Setting | What it does |
+| --- | --- |
+| **Zone** | Three toggles — `Open–4`, `5–9`, `9–12`. The active frets are the union of whatever is switched on, so they combine freely. |
+| **Only on the dots** | Restricts practice to the inlay frets: 3, 5, 7, 9 and 12. |
+| **Scale** | Restricts practice to the notes of a scale. Pick the scale and its root; `All notes` turns the filter off. |
+
+Scales available: major, natural minor, major and minor pentatonic, blues,
+dorian and mixolydian.
+
+In **Explore** mode, choosing a scale lays it out on the neck and marks every
+**root in red**. The rest of the scale comes up on tap, or all at once with
+*Show all notes*.
+
+Changing a setting ends any session in progress, since it changes what can be
+asked. If a combination leaves nothing in play, **Start** is disabled and the
+sheet says so.
 
 ## The fretboard
 
