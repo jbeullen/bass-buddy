@@ -30,6 +30,31 @@ begins a new one. Your best result per mode is kept in `localStorage`.
 - The neck runs top-to-bottom so it fits a phone in portrait. On short screens it
   scrolls, and the current question is always scrolled into view.
 
+## Publishing to GitHub Pages
+
+The app is entirely static — no backend, no build step — so Pages can serve the
+repository as-is.
+
+1. Merge this branch into `main`.
+2. In the repository, go to **Settings → Pages**.
+3. Under **Build and deployment**, set **Source** to *Deploy from a branch*.
+4. Pick branch `main` and folder `/ (root)`, then **Save**.
+5. Wait for the *pages build and deployment* run to finish under the **Actions**
+   tab (about a minute the first time).
+
+The site then lives at `https://<user>.github.io/bass-buddy/`. Every later push to
+`main` redeploys it automatically.
+
+Every asset path is relative, so the app works from that project subpath as well
+as from a custom domain or the repository root. `.nojekyll` tells Pages to serve
+the files verbatim instead of running them through Jekyll.
+
+### Custom domain (optional)
+
+Add the domain under **Settings → Pages → Custom domain**, point a `CNAME` DNS
+record at `<user>.github.io`, and enable **Enforce HTTPS** once the certificate
+is issued.
+
 ## Running it
 
 Any static file server works:
@@ -53,4 +78,7 @@ styles.css     all styling; dark, mobile-first, safe-area aware
 app.js         fretboard rendering and game logic
 manifest.json  web app manifest
 icon.svg       app icon
+icon-180.png   home-screen icon for iOS (which ignores SVG icons)
+icon-512.png   install icon for Android / desktop
+.nojekyll      serve the files as-is on GitHub Pages
 ```
