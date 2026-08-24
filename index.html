@@ -139,6 +139,25 @@
       </label>
     </section>
 
+    <section class="field">
+      <h3>Beat</h3>
+      <label class="sel"><span>Style</span><select id="beatSel"></select></label>
+
+      <div class="tempo">
+        <div class="tempo-head">
+          <span>Tempo</span>
+          <output id="tempoOut" for="tempoRange">90 BPM</output>
+        </div>
+        <div class="tempo-row">
+          <button class="tempo-btn" id="tempoDown" aria-label="Slower">&minus;</button>
+          <input type="range" id="tempoRange" min="40" max="200" step="1" value="90"
+                 aria-label="Tempo in beats per minute" />
+          <button class="tempo-btn" id="tempoUp" aria-label="Faster">+</button>
+        </div>
+      </div>
+      <p class="hint">Plays in Explore mode.</p>
+    </section>
+
     <p class="sheet-summary" id="sheetSummary"></p>
 
     <button class="start-btn" data-close>Done</button>

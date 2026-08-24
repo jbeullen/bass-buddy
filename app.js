@@ -87,7 +87,9 @@
     scale: 'none',
     root: 0,
     sound: true,
-    drone: false
+    drone: false,
+    beat: 'off',
+    tempo: 90
   };
 
   var el = {
@@ -113,6 +115,11 @@
     scaleSel: document.getElementById('scaleSel'),
     rootSel: document.getElementById('rootSel'),
     droneToggle: document.getElementById('droneToggle'),
+    beatSel: document.getElementById('beatSel'),
+    tempoRange: document.getElementById('tempoRange'),
+    tempoOut: document.getElementById('tempoOut'),
+    tempoDown: document.getElementById('tempoDown'),
+    tempoUp: document.getElementById('tempoUp'),
     sheetSummary: document.getElementById('sheetSummary')
   };
 
@@ -207,7 +214,23 @@
   // cannot reproduce the fundamental at all.
   var PARTIALS = [0, 1, 0.9, 0.75, 0.6, 0.42, 0.3, 0.22, 0.16, 0.11, 0.08, 0.05, 0.03];
 
-  var audio = { ctx: null, wave: null, voice: null, broken: false };
+  var audio = { ctx: null, wave: null, voice: null, master: null, broken: false };
+
+  // Notes, drone and drums can land on the same instant. A gentle master
+  // compressor keeps that from clipping instead of trimming every voice.
+  function masterOut(ac) {
+    if (!audio.master) {
+      var comp = ac.createDynamicsCompressor();
+      comp.threshold.value = -10;
+      comp.knee.value = 8;
+      comp.ratio.value = 4;
+      comp.attack.value = 0.004;
+      comp.release.value = 0.16;
+      comp.connect(ac.destination);
+      audio.master = comp;
+    }
+    return audio.master;
+  }
 
   function midiAt(stringIndex, fret) { return STRING_MIDI[stringIndex] + fret; }
 
@@ -272,7 +295,7 @@
 
     osc.connect(filter);
     filter.connect(gain);
-    gain.connect(ac.destination);
+    gain.connect(masterOut(ac));
 
     osc.start(now);
     osc.stop(now + 1.7);
@@ -334,7 +357,7 @@
     });
 
     filter.connect(gain);
-    gain.connect(ac.destination);
+    gain.connect(masterOut(ac));
 
     drone.nodes = { oscs: oscs, gain: gain, midi: droneMidi() };
   }
@@ -358,6 +381,191 @@
     if (drone.nodes && drone.nodes.midi === droneMidi()) return;
     stopDrone();
     startDrone();
+  }
+
+  // ---- beat ----------------------------------------------------------------
+  // One bar of sixteenths per instrument: 'x' hit, 'X' accent, '.' rest.
+  var BEATS = [
+    { id: 'off', name: 'Off' },
+    {
+      id: 'rock', name: 'Rock', swing: 0,
+      kick:  'x.....x.x.......',
+      snare: '....x.......x...',
+      hat:   'X.x.X.x.X.x.X.x.'
+    },
+    {
+      id: 'funk', name: 'Funk', swing: 0,
+      kick:  'x..x..x...x.x...',
+      snare: '....x.......x...',
+      hat:   'Xxxx Xxxx Xxxx Xxxx'.replace(/ /g, '')
+    },
+    {
+      id: 'shuffle', name: 'Shuffle', swing: 0.32,
+      kick:  'x.......x.......',
+      snare: '....x.......x...',
+      hat:   'X.x.X.x.X.x.X.x.'
+    },
+    {
+      id: 'bossa', name: 'Bossa nova', swing: 0,
+      kick:  'x..x..x...x..x..',
+      rim:   'x..x..x...x.x...',
+      hat:   'x.x.x.x.x.x.x.x.'
+    },
+    {
+      id: 'jazz', name: 'Jazz swing', swing: 0.33,
+      ride:  'x...x.x.x...x.x.',
+      hat:   '....x.......x...',
+      kick:  'x...............'
+    },
+    {
+      id: 'metronome', name: 'Metronome', swing: 0,
+      click: 'X...x...x...x...'
+    }
+  ];
+
+  var TEMPO_MIN = 40;
+  var TEMPO_MAX = 200;
+
+  function clampTempo(bpm) {
+    bpm = Math.round(bpm) || 90;
+    return Math.min(TEMPO_MAX, Math.max(TEMPO_MIN, bpm));
+  }
+
+  function beatDef() {
+    for (var i = 0; i < BEATS.length; i++) {
+      if (BEATS[i].id === settings.beat) return BEATS[i];
+    }
+    return BEATS[0];
+  }
+
+  var beat = { timer: null, step: 0, nextTime: 0, style: 'off', bus: null, noise: null };
+
+  function beatBus(ac) {
+    if (!beat.bus) {
+      beat.bus = ac.createGain();
+      beat.bus.gain.value = 0.5;
+      beat.bus.connect(masterOut(ac));
+    }
+    return beat.bus;
+  }
+
+  function noiseBuffer(ac) {
+    if (!beat.noise) {
+      var len = Math.floor(ac.sampleRate * 0.5);
+      beat.noise = ac.createBuffer(1, len, ac.sampleRate);
+      var data = beat.noise.getChannelData(0);
+      for (var i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    }
+    return beat.noise;
+  }
+
+  function hitNoise(ac, t, level, type, freq, q, decay) {
+    var src = ac.createBufferSource();
+    src.buffer = noiseBuffer(ac);
+
+    var filter = ac.createBiquadFilter();
+    filter.type = type;
+    filter.frequency.value = freq;
+    filter.Q.value = q;
+
+    var gain = ac.createGain();
+    gain.gain.setValueAtTime(level, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(beatBus(ac));
+    src.start(t);
+    src.stop(t + decay + 0.02);
+  }
+
+  function hitTone(ac, t, level, from, to, decay, type) {
+    var osc = ac.createOscillator();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(from, t);
+    if (to !== from) osc.frequency.exponentialRampToValueAtTime(to, t + decay * 0.5);
+
+    var gain = ac.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(level, t + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+
+    osc.connect(gain);
+    gain.connect(beatBus(ac));
+    osc.start(t);
+    osc.stop(t + decay + 0.02);
+  }
+
+  var VOICES = {
+    kick:  function (ac, t, v) { hitTone(ac, t, 0.85 * v, 140, 45, 0.3); },
+    snare: function (ac, t, v) {
+      hitNoise(ac, t, 0.5 * v, 'bandpass', 1900, 0.9, 0.17);
+      hitTone(ac, t, 0.18 * v, 190, 150, 0.09, 'triangle');
+    },
+    hat:   function (ac, t, v) { hitNoise(ac, t, 0.22 * v, 'highpass', 8200, 0.7, 0.045); },
+    ride:  function (ac, t, v) { hitNoise(ac, t, 0.16 * v, 'bandpass', 5400, 0.6, 0.32); },
+    rim:   function (ac, t, v) { hitNoise(ac, t, 0.32 * v, 'bandpass', 2400, 5, 0.045); },
+    click: function (ac, t, v) { hitTone(ac, t, 0.35 * v, v > 0.9 ? 1600 : 1100, v > 0.9 ? 1600 : 1100, 0.045); }
+  };
+
+  function sixteenthSeconds() { return 60 / settings.tempo / 4; }
+
+  // Swing pushes the offbeat eighths late, which is what makes a shuffle shuffle.
+  function swingOffset(def, step) {
+    if (!def.swing) return 0;
+    return (step % 4 === 2) ? def.swing * sixteenthSeconds() * 2 : 0;
+  }
+
+  function scheduleStep(ac, def, step, time) {
+    Object.keys(VOICES).forEach(function (voice) {
+      var pattern = def[voice];
+      if (!pattern) return;
+      var mark = pattern.charAt(step);
+      if (mark === 'x') VOICES[voice](ac, time, 0.8);
+      else if (mark === 'X') VOICES[voice](ac, time, 1);
+    });
+  }
+
+  // Look-ahead scheduler: the timer is coarse, the audio clock is not.
+  function beatLoop() {
+    var ac = audio.ctx;
+    if (!ac) return;
+    var def = beatDef();
+    while (beat.nextTime < ac.currentTime + 0.15) {
+      var step = beat.step % 16;
+      scheduleStep(ac, def, step, beat.nextTime + swingOffset(def, step));
+      beat.nextTime += sixteenthSeconds();
+      beat.step++;
+    }
+  }
+
+  function startBeat() {
+    if (beat.timer) return;
+    var ac = ensureAudio();
+    if (!ac) return;
+    beat.step = 0;
+    beat.nextTime = ac.currentTime + 0.1;
+    beat.timer = setInterval(beatLoop, 25);
+    beatLoop();
+  }
+
+  function stopBeat() {
+    if (!beat.timer) return;
+    clearInterval(beat.timer);
+    beat.timer = null;
+  }
+
+  function beatShouldPlay() {
+    return settings.beat !== 'off' && settings.sound &&
+           state.mode === 'explore' && !document.hidden;
+  }
+
+  function updateBeat() {
+    if (!beatShouldPlay()) return stopBeat();
+    if (beat.timer && beat.style === settings.beat) return;   // tempo changes ride along
+    stopBeat();
+    beat.style = settings.beat;
+    startBeat();
   }
 
   // In Find Note the question is a pitch class, so sound it at the lowest
@@ -401,6 +609,7 @@
     updateReplayable();
     if (!on && audio.ctx) stopVoice(audio.ctx.currentTime);
     updateDrone();
+    updateBeat();
   }
 
   // ---------------------------------------------------------------- filters
@@ -592,6 +801,8 @@
     }
     if (typeof saved.sound === 'boolean') settings.sound = saved.sound;
     if (typeof saved.drone === 'boolean') settings.drone = saved.drone;
+    if (BEATS.some(function (b) { return b.id === saved.beat; })) settings.beat = saved.beat;
+    if (typeof saved.tempo === 'number') settings.tempo = clampTempo(saved.tempo);
   }
 
   function saveSettings() {
@@ -826,10 +1037,14 @@
   }
 
   function updateExploreHint() {
-    el.exploreHint.textContent = hasScale()
-      ? 'Red marks the root of ' + scaleName() + '.' +
-        (droneShouldRing() ? ' Drone ringing on ' + NOTES[settings.root].name + '.' : '')
-      : 'Tap any position on the neck to reveal its note.';
+    var parts = [hasScale()
+      ? 'Red marks the root of ' + scaleName() + '.'
+      : 'Tap any position on the neck to reveal its note.'];
+    var backing = [];
+    if (droneShouldRing()) backing.push('drone on ' + NOTES[settings.root].name);
+    if (beatShouldPlay()) backing.push(beatDef().name.toLowerCase() + ' at ' + settings.tempo + ' BPM');
+    if (backing.length) parts.push('Playing ' + backing.join(', ') + '.');
+    el.exploreHint.textContent = parts.join(' ');
   }
 
   function exploreTap(stringIndex, fret) {
@@ -881,6 +1096,7 @@
     updateBest();
 
     updateDrone();
+    updateBeat();
     if (state.mode === 'explore') renderExplore();
     setPrompt(idleText());
     updateReplayable();
@@ -936,6 +1152,21 @@
       opt.textContent = noteLabel(pitch);
       el.rootSel.appendChild(opt);
     });
+
+    BEATS.forEach(function (style) {
+      var opt = document.createElement('option');
+      opt.value = style.id;
+      opt.textContent = style.name;
+      el.beatSel.appendChild(opt);
+    });
+  }
+
+  function setTempo(bpm) {
+    settings.tempo = clampTempo(bpm);
+    el.tempoRange.value = String(settings.tempo);
+    el.tempoOut.textContent = settings.tempo + ' BPM';
+    saveSettings();
+    if (state.mode === 'explore') updateExploreHint();
   }
 
   function syncSettingsUI() {
@@ -948,6 +1179,9 @@
     el.scaleSel.value = settings.scale;
     el.rootSel.value = String(settings.root);
     el.droneToggle.checked = settings.drone;
+    el.beatSel.value = settings.beat;
+    el.tempoRange.value = String(settings.tempo);
+    el.tempoOut.textContent = settings.tempo + ' BPM';
     el.rootSel.disabled = !hasScale();
     el.rootSel.parentNode.classList.toggle('is-disabled', !hasScale());
   }
@@ -1066,8 +1300,25 @@
     if (state.mode === 'explore') updateExploreHint();
   });
 
-  // Never leave a drone ringing in someone's pocket.
-  document.addEventListener('visibilitychange', updateDrone);
+  // Never leave a drone or a beat running in someone's pocket.
+  document.addEventListener('visibilitychange', function () {
+    updateDrone();
+    updateBeat();
+  });
+
+  el.beatSel.addEventListener('change', function () {
+    settings.beat = el.beatSel.value;
+    saveSettings();
+    updateBeat();
+    if (state.mode === 'explore') updateExploreHint();
+  });
+
+  el.tempoRange.addEventListener('input', function () {
+    setTempo(parseInt(el.tempoRange.value, 10));
+  });
+
+  el.tempoDown.addEventListener('click', function () { setTempo(settings.tempo - 1); });
+  el.tempoUp.addEventListener('click', function () { setTempo(settings.tempo + 1); });
 
   // ---------------------------------------------------------------- boot
 

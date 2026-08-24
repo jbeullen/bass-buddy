@@ -54,6 +54,7 @@ tapped. Settings are remembered in `localStorage`.
 | **Only on the dots** | Restricts practice to the inlay frets: 3, 5, 7, 9 and 12. |
 | **Scale** | Restricts practice to the notes of a scale. Pick the scale and its root; `All notes` turns the filter off. |
 | **Drone** | Rings the root continuously in Explore mode, to improvise or run the scale against. |
+| **Beat** | A drum pattern in Explore mode, with a tempo from 40 to 200 BPM (90 by default). |
 
 Scales available: major, natural minor, major and minor pentatonic, blues,
 dorian and mixolydian.
@@ -65,6 +66,22 @@ In **Explore** mode, choosing a scale lays it out on the neck and marks every
 Changing a filter ends any session in progress, since it changes what can be
 asked. The drone is not a filter, so toggling it leaves a session alone. If a
 combination leaves nothing in play, **Start** is disabled and the sheet says so.
+
+### The drone and the beat
+
+Both are practice backing for **Explore** mode, and neither sounds during a
+drill. The drone additionally needs a scale selected — it has a root to ring.
+The beat does not, so it works as a plain metronome or groove to play over.
+Toggling either leaves a running session alone.
+
+Beat styles: rock, funk, shuffle, bossa nova, jazz swing and a plain metronome.
+Shuffle and jazz swing their offbeat eighths towards a triplet feel. Everything
+is synthesised — kick, snare, hats, ride and rim are oscillators and filtered
+noise, scheduled against the audio clock rather than `setInterval`, so the
+timing does not drift.
+
+Notes, drone and drums share a master compressor, so a kick landing under a note
+and the drone cannot clip.
 
 ### The drone
 
