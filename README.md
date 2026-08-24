@@ -75,10 +75,28 @@ The beat does not, so it works as a plain metronome or groove to play over.
 Toggling either leaves a running session alone.
 
 Beat styles: rock, funk, shuffle, bossa nova, jazz swing and a plain metronome.
-Shuffle and jazz swing their offbeat eighths towards a triplet feel. Everything
-is synthesised — kick, snare, hats, ride and rim are oscillators and filtered
-noise, scheduled against the audio clock rather than `setInterval`, so the
+Shuffle and jazz swing their offbeat eighths towards a triplet feel. Steps are
+scheduled against the audio clock rather than fired from `setInterval`, so the
 timing does not drift.
+
+Everything is synthesised — there are no audio files anywhere in this project.
+What keeps it from sounding like a drum machine:
+
+- **Cymbals are metal, not noise.** Hats and ride are a bank of six square waves
+  at inharmonic ratios, band-passed and high-passed. Filtered white noise is the
+  usual shortcut and it reads as static rather than as a cymbal.
+- **Layered kick and snare.** The kick is a beater click plus a two-stage pitch
+  drop through gentle saturation; the snare is two detuned shell tones plus two
+  noise bands, the brighter of which rings on after the shell dies, the way real
+  snare wires do.
+- **A room.** The kit runs in parallel through a short synthetic impulse
+  response with a few early reflections. Dryness is most of what makes
+  synthesised drums sound artificial.
+- **No two hits alike.** Velocity varies about 12% per hit and timing by a few
+  milliseconds; harder hits are brighter, not just louder; the noise layers read
+  from a different point of the buffer each time; funk carries ghost notes on
+  the snare. The metronome opts out of all of it and stays exact — a click that
+  wanders is not a metronome.
 
 Notes, drone and drums share a master compressor, so a kick landing under a note
 and the drone cannot clip.

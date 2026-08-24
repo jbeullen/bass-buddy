@@ -396,7 +396,7 @@
     {
       id: 'funk', name: 'Funk', swing: 0,
       kick:  'x..x..x...x.x...',
-      snare: '....x.......x...',
+      snare: '..g.x..g.g..x..g',
       hat:   'Xxxx Xxxx Xxxx Xxxx'.replace(/ /g, '')
     },
     {
@@ -418,7 +418,7 @@
       kick:  'x...............'
     },
     {
-      id: 'metronome', name: 'Metronome', swing: 0,
+      id: 'metronome', name: 'Metronome', swing: 0, human: false,
       click: 'X...x...x...x...'
     }
   ];
@@ -438,20 +438,61 @@
     return BEATS[0];
   }
 
-  var beat = { timer: null, step: 0, nextTime: 0, style: 'off', bus: null, noise: null };
+  var beat = { timer: null, step: 0, nextTime: 0, style: 'off',
+               bus: null, noise: null, curve: null };
+
+  // Real kits are never dry. A short synthetic room, sent in parallel, does
+  // more for realism than any amount of work on the individual voices.
+  function roomImpulse(ac, seconds, falloff) {
+    var len = Math.floor(ac.sampleRate * seconds);
+    var buf = ac.createBuffer(2, len, ac.sampleRate);
+    for (var ch = 0; ch < 2; ch++) {
+      var d = buf.getChannelData(ch);
+      for (var i = 0; i < len; i++) {
+        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, falloff);
+      }
+      // a couple of early reflections, offset per channel for width
+      [0.011, 0.019, 0.031].forEach(function (delay, n) {
+        var at = Math.floor((delay + ch * 0.003) * ac.sampleRate);
+        if (at < len) d[at] += (n % 2 ? -1 : 1) * (0.5 - n * 0.13);
+      });
+    }
+    return buf;
+  }
 
   function beatBus(ac) {
     if (!beat.bus) {
       beat.bus = ac.createGain();
       beat.bus.gain.value = 0.5;
       beat.bus.connect(masterOut(ac));
+
+      var room = ac.createConvolver();
+      room.buffer = roomImpulse(ac, 0.42, 3.4);
+      var wet = ac.createGain();
+      wet.gain.value = 0.28;
+      beat.bus.connect(room);
+      room.connect(wet);
+      wet.connect(masterOut(ac));
     }
     return beat.bus;
   }
 
+  // Gentle saturation gives the kick harmonics a phone speaker can push.
+  function driveCurve(ac) {
+    if (!beat.curve) {
+      var n = 1024;
+      beat.curve = new Float32Array(n);
+      for (var i = 0; i < n; i++) {
+        var x = (i / (n - 1)) * 2 - 1;
+        beat.curve[i] = Math.tanh(x * 2.2) / Math.tanh(2.2);
+      }
+    }
+    return beat.curve;
+  }
+
   function noiseBuffer(ac) {
     if (!beat.noise) {
-      var len = Math.floor(ac.sampleRate * 0.5);
+      var len = Math.floor(ac.sampleRate * 2);
       beat.noise = ac.createBuffer(1, len, ac.sampleRate);
       var data = beat.noise.getChannelData(0);
       for (var i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
@@ -459,9 +500,10 @@
     return beat.noise;
   }
 
-  function hitNoise(ac, t, level, type, freq, q, decay) {
+  function hitNoise(ac, t, level, type, freq, q, decay, dest) {
     var src = ac.createBufferSource();
     src.buffer = noiseBuffer(ac);
+    src.playbackRate.value = 0.8 + Math.random() * 0.4;   // never the same noise twice
 
     var filter = ac.createBiquadFilter();
     filter.type = type;
@@ -474,12 +516,12 @@
 
     src.connect(filter);
     filter.connect(gain);
-    gain.connect(beatBus(ac));
+    gain.connect(dest || beatBus(ac));
     src.start(t);
     src.stop(t + decay + 0.02);
   }
 
-  function hitTone(ac, t, level, from, to, decay, type) {
+  function hitTone(ac, t, level, from, to, decay, type, dest) {
     var osc = ac.createOscillator();
     osc.type = type || 'sine';
     osc.frequency.setValueAtTime(from, t);
@@ -491,21 +533,107 @@
     gain.gain.exponentialRampToValueAtTime(0.0001, t + decay);
 
     osc.connect(gain);
-    gain.connect(beatBus(ac));
+    gain.connect(dest || beatBus(ac));
     osc.start(t);
     osc.stop(t + decay + 0.02);
   }
 
+  // Cymbals are metal: their partials are inharmonic, which is why filtered
+  // white noise reads as static rather than as a hi-hat. These six ratios are
+  // the classic drum-machine square-wave bank.
+  var METAL = [1, 1.4826, 1.8003, 2.5460, 2.6303, 3.8967];
+
+  function hitMetal(ac, t, level, base, bpFreq, bpQ, hpFreq, decay) {
+    var bp = ac.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = bpFreq;
+    bp.Q.value = bpQ;
+
+    var hp = ac.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = hpFreq;
+
+    var gain = ac.createGain();
+    gain.gain.setValueAtTime(level, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+
+    METAL.forEach(function (ratio) {
+      var osc = ac.createOscillator();
+      osc.type = 'square';
+      osc.frequency.value = base * ratio;
+      osc.connect(bp);
+      osc.start(t);
+      osc.stop(t + decay + 0.02);
+    });
+
+    bp.connect(hp);
+    hp.connect(gain);
+    gain.connect(beatBus(ac));
+  }
+
   var VOICES = {
-    kick:  function (ac, t, v) { hitTone(ac, t, 0.85 * v, 140, 45, 0.3); },
-    snare: function (ac, t, v) {
-      hitNoise(ac, t, 0.5 * v, 'bandpass', 1900, 0.9, 0.17);
-      hitTone(ac, t, 0.18 * v, 190, 150, 0.09, 'triangle');
+    // beater click, then a two-stage pitch drop through a little saturation
+    kick: function (ac, t, v) {
+      var shaper = ac.createWaveShaper();
+      shaper.curve = driveCurve(ac);
+      shaper.oversample = '2x';
+      var out = ac.createGain();
+      out.gain.value = 0.95 * v;
+      shaper.connect(out);
+      out.connect(beatBus(ac));
+
+      var osc = ac.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(165, t);
+      osc.frequency.exponentialRampToValueAtTime(72, t + 0.035);
+      osc.frequency.exponentialRampToValueAtTime(46, t + 0.22);
+
+      var env = ac.createGain();
+      env.gain.setValueAtTime(0.0001, t);
+      env.gain.exponentialRampToValueAtTime(0.9, t + 0.006);
+      env.gain.exponentialRampToValueAtTime(0.28, t + 0.09);
+      env.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+
+      osc.connect(env);
+      env.connect(shaper);
+      osc.start(t);
+      osc.stop(t + 0.36);
+
+      hitNoise(ac, t, 0.12 * v, 'bandpass', 2600, 1.2, 0.014, shaper);
     },
-    hat:   function (ac, t, v) { hitNoise(ac, t, 0.22 * v, 'highpass', 8200, 0.7, 0.045); },
-    ride:  function (ac, t, v) { hitNoise(ac, t, 0.16 * v, 'bandpass', 5400, 0.6, 0.32); },
-    rim:   function (ac, t, v) { hitNoise(ac, t, 0.32 * v, 'bandpass', 2400, 5, 0.045); },
-    click: function (ac, t, v) { hitTone(ac, t, 0.35 * v, v > 0.9 ? 1600 : 1100, v > 0.9 ? 1600 : 1100, 0.045); }
+
+    // pitched shell plus the snare wires, which ring on after the shell dies
+    snare: function (ac, t, v) {
+      var bright = 0.75 + v * 0.35;
+      hitTone(ac, t, 0.26 * v, 195, 168, 0.085, 'triangle');
+      hitTone(ac, t, 0.16 * v, 331, 292, 0.06, 'triangle');
+      hitNoise(ac, t, 0.55 * v, 'bandpass', 1750 * bright, 0.7, 0.11);
+      hitNoise(ac, t, 0.48 * v, 'highpass', 3600 * bright, 0.6, 0.13 + v * 0.09);
+    },
+
+    hat: function (ac, t, v) {
+      // alternate hits detune slightly, the way two cymbals never match
+      var base = 300 * (0.97 + Math.random() * 0.06);
+      hitMetal(ac, t, 0.30 * v, base, 11000, 0.9, 7200, 0.028 + v * 0.03);
+      hitNoise(ac, t, 0.05 * v, 'highpass', 9000, 0.7, 0.02 + v * 0.02);
+    },
+
+    // ping plus wash
+    ride: function (ac, t, v) {
+      hitMetal(ac, t, 0.19 * v, 268, 5200, 0.7, 3000, 0.45 + v * 0.25);
+      hitTone(ac, t, 0.08 * v, 2450, 2450, 0.09, 'triangle');
+      hitNoise(ac, t, 0.07 * v, 'bandpass', 6800, 0.5, 0.3);
+    },
+
+    rim: function (ac, t, v) {
+      hitTone(ac, t, 0.34 * v, 1700, 1500, 0.028, 'square');
+      hitNoise(ac, t, 0.42 * v, 'bandpass', 2400, 4, 0.035);
+    },
+
+    click: function (ac, t, v) {
+      var f = v > 0.9 ? 1600 : 1100;
+      hitTone(ac, t, 0.35 * v, f, f, 0.045);
+    }
   };
 
   function sixteenthSeconds() { return 60 / settings.tempo / 4; }
@@ -516,13 +644,23 @@
     return (step % 4 === 2) ? def.swing * sixteenthSeconds() * 2 : 0;
   }
 
+  var MARK_VELOCITY = { X: 1, x: 0.8, g: 0.32 };   // accent, normal, ghost
+
   function scheduleStep(ac, def, step, time) {
+    // A drummer is not a grid: nudging velocity and timing per hit is most of
+    // the difference between a groove and a machine. The metronome opts out.
+    var loose = def.human !== false;
     Object.keys(VOICES).forEach(function (voice) {
       var pattern = def[voice];
       if (!pattern) return;
-      var mark = pattern.charAt(step);
-      if (mark === 'x') VOICES[voice](ac, time, 0.8);
-      else if (mark === 'X') VOICES[voice](ac, time, 1);
+      var velocity = MARK_VELOCITY[pattern.charAt(step)];
+      if (!velocity) return;
+      if (loose) {
+        velocity *= 0.88 + Math.random() * 0.24;
+        VOICES[voice](ac, time + (Math.random() - 0.5) * 0.006, Math.min(velocity, 1));
+      } else {
+        VOICES[voice](ac, time, velocity);
+      }
     });
   }
 
