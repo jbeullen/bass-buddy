@@ -53,7 +53,7 @@ tapped. Settings are remembered in `localStorage`.
 | **Zone** | Three toggles — `Open–4`, `5–9`, `9–12`. The active frets are the union of whatever is switched on, so they combine freely. |
 | **Only on the dots** | Restricts practice to the inlay frets: 3, 5, 7, 9 and 12. |
 | **Scale** | Restricts practice to the notes of a scale. Pick the scale and its root; `All notes` turns the filter off. |
-| **Drone** | Rings the root continuously in Explore mode, to improvise or run the scale against. |
+| **Drone** | Sounds the root in Explore mode, to improvise or run the scale against, in one of five voices. |
 | **Beat** | A drum pattern in Explore mode, with a tempo from 40 to 200 BPM (90 by default). |
 
 Scales available: major, natural minor, major and minor pentatonic, blues,
@@ -104,11 +104,25 @@ and the drone cannot clip.
 ### The drone
 
 The drone only sounds in **Explore** with a scale selected — it is a practice
-backing, not a game sound. It rings the root an octave or two above the bass
+backing, not a game sound. It sounds the root an octave or two above the bass
 roots (C3–B3), well below the level of the notes you play, so the neck stays
 audible over it. It follows the root you pick, stops when you leave Explore,
 clear the scale, or mute, and never keeps ringing while the page is in the
 background.
+
+**Drone sound** picks the voice:
+
+| Voice | |
+| --- | --- |
+| **Pad** | Detuned triangles with an octave on top. The plain reference tone. |
+| **Organ** | Additive drawbar harmonics with a slow rotary wobble. |
+| **G-funk lead** | Saw and square through a resonant lowpass, vibrato and a slow filter sweep. |
+| **Piano** | Inharmonic partials plus a hammer, each partial decaying at its own rate. |
+| **Rhodes** | An FM tine with a bell partial and tremolo. |
+
+Pad, organ and the lead sustain. Piano and Rhodes decay, so they re-strike once
+a bar at the tempo set under **Beat** — and when a beat is playing they lock to
+its bar, landing within a couple of milliseconds of beat one.
 
 ## The fretboard
 
