@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="theme-color" content="#12151b" />
+<meta name="description" content="Bass Buddy — learn the bass guitar fretboard on your phone." />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="mobile-web-app-capable" content="yes" />
+<title>Bass Buddy</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <h1>Bass Buddy</h1>
+    </div>
+    <div class="scoreboard" id="scoreboard">
+      <div class="score" id="score" aria-live="polite">0<span class="score-sep">/</span><span class="score-total">10</span></div>
+      <div class="best" id="best">Best —</div>
+    </div>
+  </header>
+
+  <nav class="modes" id="modes" role="tablist" aria-label="Practice modes">
+    <button class="mode-btn is-active" role="tab" aria-selected="true" data-mode="name">Name Note</button>
+    <button class="mode-btn" role="tab" aria-selected="false" data-mode="find">Find Note</button>
+    <button class="mode-btn" role="tab" aria-selected="false" data-mode="explore">Explore</button>
+  </nav>
+
+  <div class="prompt" id="prompt">Press start to begin a session.</div>
+
+  <div class="progress" id="progress" aria-hidden="true">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+
+  <main class="neck-wrap">
+    <div class="neck" id="neck">
+      <div class="string-heads" id="stringHeads"></div>
+      <div class="board" id="board" aria-label="Bass fretboard, nut to 12th fret">
+        <div class="nut-row" aria-hidden="true">
+          <div class="nut-gutter"></div>
+          <div class="nut"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <section class="pad" id="notePad" aria-label="Note answers"></section>
+
+  <section class="explore-tools" id="exploreTools" hidden>
+    <button class="ghost-btn" id="toggleAll" aria-pressed="false">Show all notes</button>
+    <p class="hint">Tap any position on the neck to reveal its note.</p>
+  </section>
+
+  <footer class="footer">
+    <button class="start-btn" id="startBtn">Start</button>
+  </footer>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
