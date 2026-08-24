@@ -243,6 +243,20 @@ button {
   position: relative;
 }
 
+.open-row {
+  flex: 0 0 auto;
+  min-height: 34px;
+}
+
+/* above the nut there is no fretwood and no fretwire — just the open strings */
+.open-row .cell {
+  background: var(--bg);
+  border-bottom: 0;
+  box-shadow: none;
+}
+
+.open-row .cell::before { opacity: 0.7; }
+
 .fret-no {
   display: flex;
   align-items: center;
@@ -467,6 +481,7 @@ button {
   .mode-btn { padding: 7px 4px; font-size: 12px; }
   .start-btn { min-height: 44px; }
   .board-row { min-height: 26px; }
+  .open-row { min-height: 30px; }
 
   /* one row of buttons instead of three gives the neck ~90px back */
   .pad { grid-template-columns: repeat(6, 1fr); gap: 5px; }

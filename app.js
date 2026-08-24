@@ -30,7 +30,7 @@
     { name: 'G', open: 7 }
   ];
 
-  var FRETS = 12;                 // nut through the 12th fret
+  var FRETS = 12;                 // fret 0 (open string) through the 12th fret
   var QUESTIONS = 10;             // notes per session
   var SINGLE_INLAYS = [3, 5, 7, 9];
   var DOUBLE_INLAYS = [12];
@@ -93,38 +93,46 @@
 
     for (var i = 0; i < STRINGS.length; i++) cells[i] = [];
 
+    // Fret 0 is the open-string row; it sits above the nut, which is already
+    // in the markup as the board's first child.
+    el.board.insertBefore(makeRow(0), el.board.firstElementChild);
+
     for (var fret = 1; fret <= FRETS; fret++) {
-      var row = document.createElement('div');
-      row.className = 'board-row';
+      el.board.appendChild(makeRow(fret));
+    }
+  }
 
-      var num = document.createElement('div');
-      num.className = 'fret-no';
-      num.textContent = fret;
-      row.appendChild(num);
+  function makeRow(fret) {
+    var row = document.createElement('div');
+    row.className = 'board-row' + (fret === 0 ? ' open-row' : '');
 
-      for (var s = 0; s < STRINGS.length; s++) {
-        var cell = document.createElement('div');
-        cell.className = 'cell';
-        cell.dataset.string = s;
-        cell.dataset.fret = fret;
+    var num = document.createElement('div');
+    num.className = 'fret-no';
+    num.textContent = fret;
+    row.appendChild(num);
 
-        if (SINGLE_INLAYS.indexOf(fret) !== -1 && s === 1) {
-          cell.classList.add('inlay-r');
-        }
-        if (DOUBLE_INLAYS.indexOf(fret) !== -1 && (s === 0 || s === 2)) {
-          cell.classList.add('inlay-r');
-        }
+    for (var s = 0; s < STRINGS.length; s++) {
+      var cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.string = s;
+      cell.dataset.fret = fret;
 
-        var marker = document.createElement('span');
-        marker.className = 'marker';
-        cell.appendChild(marker);
-
-        row.appendChild(cell);
-        cells[s][fret] = cell;
+      if (SINGLE_INLAYS.indexOf(fret) !== -1 && s === 1) {
+        cell.classList.add('inlay-r');
+      }
+      if (DOUBLE_INLAYS.indexOf(fret) !== -1 && (s === 0 || s === 2)) {
+        cell.classList.add('inlay-r');
       }
 
-      el.board.appendChild(row);
+      var marker = document.createElement('span');
+      marker.className = 'marker';
+      cell.appendChild(marker);
+
+      row.appendChild(cell);
+      cells[s][fret] = cell;
     }
+
+    return row;
   }
 
   function buildPad() {
@@ -153,7 +161,7 @@
 
   function eachCell(fn) {
     for (var s = 0; s < STRINGS.length; s++) {
-      for (var f = 1; f <= FRETS; f++) fn(cells[s][f], s, f);
+      for (var f = 0; f <= FRETS; f++) fn(cells[s][f], s, f);
     }
   }
 
@@ -239,7 +247,7 @@
     do {
       pos = {
         string: Math.floor(Math.random() * STRINGS.length),
-        fret: 1 + Math.floor(Math.random() * FRETS)
+        fret: Math.floor(Math.random() * (FRETS + 1))
       };
       guard++;
     } while (state.target && guard < 20 &&
@@ -423,7 +431,7 @@
     cell.classList.remove('is-reveal');
     setMarker(cell, 'is-target', NOTES[pitch].name);
     setPrompt(noteLabel(pitch) + ' — ' + STRINGS[stringIndex].name +
-              ' string, fret ' + fret);
+              (fret === 0 ? ' string, open' : ' string, fret ' + fret));
   }
 
   // ---------------------------------------------------------------- modes

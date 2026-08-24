@@ -10,7 +10,7 @@ Switch modes with the tabs at the top.
 
 | Mode | What it does |
 | --- | --- |
-| **Name Note** | A red dot appears somewhere on the neck. Tap the matching note on the pad. |
+| **Name Note** | A red dot appears somewhere on the neck — open string or fretted. Tap the matching note on the pad. |
 | **Find Note** | A note name is shown. Tap any position on the neck that plays it. |
 | **Explore** | Free practice — tap any position to reveal its note, or show the whole neck at once. |
 
@@ -24,7 +24,9 @@ begins a new one. Your best result per mode is kept in `localStorage`.
 ## The fretboard
 
 - Standard 4-string tuning, low to high: **E A D G** (left to right).
-- Nut through the **12th fret**, with the usual inlay markers at 3, 5, 7, 9 and 12.
+- Open strings through the **12th fret**, with the usual inlay markers at 3, 5, 7,
+  9 and 12. Open strings are fret `0`: their dot sits above the nut, so the neck
+  reads the same way as a chord chart.
 - The neck runs top-to-bottom so it fits a phone in portrait. On short screens it
   scrolls, and the current question is always scrolled into view.
 
