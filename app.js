@@ -86,7 +86,8 @@
     dotsOnly: false,
     scale: 'none',
     root: 0,
-    sound: true
+    sound: true,
+    drone: false
   };
 
   var el = {
@@ -111,6 +112,7 @@
     dotsOnly: document.getElementById('dotsOnly'),
     scaleSel: document.getElementById('scaleSel'),
     rootSel: document.getElementById('rootSel'),
+    droneToggle: document.getElementById('droneToggle'),
     sheetSummary: document.getElementById('sheetSummary')
   };
 
@@ -283,6 +285,81 @@
 
   function playPosition(stringIndex, fret) { playMidi(midiAt(stringIndex, fret)); }
 
+  // ---- drone ---------------------------------------------------------------
+  // A sustained root to improvise against. It sits an octave or two above the
+  // bass roots (C3–B3) so it stays clear of the notes being played on the neck.
+  var DRONE_BASE = 48;
+
+  var drone = { nodes: null };
+
+  function droneMidi() { return DRONE_BASE + settings.root; }
+
+  function droneShouldRing() {
+    return settings.drone && settings.sound && state.mode === 'explore' &&
+           hasScale() && !document.hidden;
+  }
+
+  function startDrone() {
+    if (drone.nodes) return;
+    var ac = ensureAudio();
+    if (!ac) return;
+
+    var now = ac.currentTime;
+    var freq = midiToFreq(droneMidi());
+
+    var filter = ac.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 1600;
+    filter.Q.value = 0.6;
+
+    var gain = ac.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    // Well under the plucked notes: a reference to play against, not over.
+    gain.gain.exponentialRampToValueAtTime(0.055, now + 0.5);
+
+    // Two lightly detuned voices for warmth, plus a quiet octave on top so the
+    // drone carries through a small speaker.
+    var oscs = [];
+    [[freq, 1, -5], [freq, 1, 5], [freq * 2, 0.4, 0]].forEach(function (spec) {
+      var osc = ac.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.value = spec[0];
+      osc.detune.value = spec[2];
+      var mix = ac.createGain();
+      mix.gain.value = spec[1];
+      osc.connect(mix);
+      mix.connect(filter);
+      osc.start(now);
+      oscs.push(osc);
+    });
+
+    filter.connect(gain);
+    gain.connect(ac.destination);
+
+    drone.nodes = { oscs: oscs, gain: gain, midi: droneMidi() };
+  }
+
+  function stopDrone() {
+    var d = drone.nodes;
+    if (!d) return;
+    drone.nodes = null;
+    if (!audio.ctx) return;
+    var now = audio.ctx.currentTime;
+    try {
+      d.gain.gain.cancelScheduledValues(now);
+      d.gain.gain.setValueAtTime(Math.max(d.gain.gain.value, 0.0001), now);
+      d.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+      d.oscs.forEach(function (osc) { osc.stop(now + 0.4); });
+    } catch (e) { /* already stopped */ }
+  }
+
+  function updateDrone() {
+    if (!droneShouldRing()) return stopDrone();
+    if (drone.nodes && drone.nodes.midi === droneMidi()) return;
+    stopDrone();
+    startDrone();
+  }
+
   // In Find Note the question is a pitch class, so sound it at the lowest
   // position still in play — the one a bassist would reach for first.
   function lowestPositionFor(pitch) {
@@ -323,6 +400,7 @@
     el.soundBtn.classList.toggle('is-off', !on);
     updateReplayable();
     if (!on && audio.ctx) stopVoice(audio.ctx.currentTime);
+    updateDrone();
   }
 
   // ---------------------------------------------------------------- filters
@@ -513,6 +591,7 @@
       settings.root = saved.root;
     }
     if (typeof saved.sound === 'boolean') settings.sound = saved.sound;
+    if (typeof saved.drone === 'boolean') settings.drone = saved.drone;
   }
 
   function saveSettings() {
@@ -748,7 +827,8 @@
 
   function updateExploreHint() {
     el.exploreHint.textContent = hasScale()
-      ? 'Red marks the root of ' + scaleName() + '.'
+      ? 'Red marks the root of ' + scaleName() + '.' +
+        (droneShouldRing() ? ' Drone ringing on ' + NOTES[settings.root].name + '.' : '')
       : 'Tap any position on the neck to reveal its note.';
   }
 
@@ -800,6 +880,7 @@
     updateScore();
     updateBest();
 
+    updateDrone();
     if (state.mode === 'explore') renderExplore();
     setPrompt(idleText());
     updateReplayable();
@@ -866,6 +947,7 @@
     el.dotsOnly.checked = settings.dotsOnly;
     el.scaleSel.value = settings.scale;
     el.rootSel.value = String(settings.root);
+    el.droneToggle.checked = settings.drone;
     el.rootSel.disabled = !hasScale();
     el.rootSel.parentNode.classList.toggle('is-disabled', !hasScale());
   }
@@ -976,14 +1058,25 @@
     settingsChanged();
   });
 
+  // The drone changes nothing about the questions, so it leaves a session alone.
+  el.droneToggle.addEventListener('change', function () {
+    settings.drone = el.droneToggle.checked;
+    saveSettings();
+    updateDrone();
+    if (state.mode === 'explore') updateExploreHint();
+  });
+
+  // Never leave a drone ringing in someone's pocket.
+  document.addEventListener('visibilitychange', updateDrone);
+
   // ---------------------------------------------------------------- boot
 
   buildBoard();
   buildPad();
   buildSettings();
   loadSettings();
-  setSound(settings.sound);
   syncSettingsUI();
+  setSound(settings.sound);
   applyFilter();
   updateScore();
   updateBest();

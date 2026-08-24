@@ -53,6 +53,7 @@ tapped. Settings are remembered in `localStorage`.
 | **Zone** | Three toggles — `Open–4`, `5–9`, `9–12`. The active frets are the union of whatever is switched on, so they combine freely. |
 | **Only on the dots** | Restricts practice to the inlay frets: 3, 5, 7, 9 and 12. |
 | **Scale** | Restricts practice to the notes of a scale. Pick the scale and its root; `All notes` turns the filter off. |
+| **Drone** | Rings the root continuously in Explore mode, to improvise or run the scale against. |
 
 Scales available: major, natural minor, major and minor pentatonic, blues,
 dorian and mixolydian.
@@ -61,9 +62,18 @@ In **Explore** mode, choosing a scale lays it out on the neck and marks every
 **root in red**. The rest of the scale comes up on tap, or all at once with
 *Show all notes*.
 
-Changing a setting ends any session in progress, since it changes what can be
-asked. If a combination leaves nothing in play, **Start** is disabled and the
-sheet says so.
+Changing a filter ends any session in progress, since it changes what can be
+asked. The drone is not a filter, so toggling it leaves a session alone. If a
+combination leaves nothing in play, **Start** is disabled and the sheet says so.
+
+### The drone
+
+The drone only sounds in **Explore** with a scale selected — it is a practice
+backing, not a game sound. It rings the root an octave or two above the bass
+roots (C3–B3), well below the level of the notes you play, so the neck stays
+audible over it. It follows the root you pick, stops when you leave Explore,
+clear the scale, or mute, and never keeps ringing while the page is in the
+background.
 
 ## The fretboard
 
