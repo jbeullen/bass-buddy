@@ -41,6 +41,13 @@ speaker, exactly as a real bass does.
 Mobile browsers only allow audio to start from a user gesture, which is why the
 first note you hear follows a tap on **Start** or on the neck.
 
+### Using real samples instead
+
+The kit is synthesised, but any voice can be replaced with a sample: drop the
+files into `audio/` and name them in `audio/kit.json`. Voices you leave out stay
+synthesised, so replacing only the cymbals is a valid thing to do. See
+`audio/README.md` for the format.
+
 ## Practice settings
 
 The sliders button in the top right opens the settings sheet. Everything there
@@ -82,9 +89,12 @@ timing does not drift.
 Everything is synthesised — there are no audio files anywhere in this project.
 What keeps it from sounding like a drum machine:
 
-- **Cymbals are metal, not noise.** Hats and ride are a bank of six square waves
-  at inharmonic ratios, band-passed and high-passed. Filtered white noise is the
-  usual shortcut and it reads as static rather than as a cymbal.
+- **Cymbals are shaped noise.** A real cymbal is a dense wall of closely spaced
+  modes, so hats and ride are noise through a highpass, two resonant peaks and a
+  lowpass that closes as the hit decays — the resonances give them a voice
+  without giving them a pitch. A bank of inharmonic square waves, which is the
+  classic drum-machine hat, sits underneath at a trace level for shimmer;
+  leaning on it makes the kit sound like an 808 rather than a kit.
 - **Layered kick and snare.** The kick is a beater click plus a two-stage pitch
   drop through gentle saturation; the snare is two detuned shell tones plus two
   noise bands, the brighter of which rings on after the shell dies, the way real
@@ -177,6 +187,7 @@ On iOS/Android you can add it to the home screen and it runs full screen.
 
 ```
 index.html     markup and layout
+audio/         optional drop-in sample kit; empty by default
 styles.css     all styling; dark, mobile-first, safe-area aware
 app.js         fretboard rendering and game logic
 manifest.json  web app manifest

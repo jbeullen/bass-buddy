@@ -865,18 +865,93 @@
       hitNoise(ac, t, 0.48 * v, 'highpass', 3600 * bright, 0.6, 0.13 + v * 0.09);
     },
 
+    // An acoustic cymbal is a dense wall of closely spaced modes — far closer
+    // to shaped noise than to a handful of tuned oscillators. A bank of
+    // inharmonic squares is the classic drum-machine hat, so it is kept here
+    // only as a trace of shimmer under the noise.
     hat: function (ac, t, v) {
-      // alternate hits detune slightly, the way two cymbals never match
-      var base = 300 * (0.97 + Math.random() * 0.06);
-      hitMetal(ac, t, 0.30 * v, base, 11000, 0.9, 7200, 0.028 + v * 0.03);
-      hitNoise(ac, t, 0.05 * v, 'highpass', 9000, 0.7, 0.02 + v * 0.02);
+      var decay = 0.032 + v * 0.035;
+      var src = ac.createBufferSource();
+      src.buffer = noiseBuffer(ac);
+      src.playbackRate.value = 0.9 + Math.random() * 0.3;
+
+      var hp = ac.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 4800 + Math.random() * 500;
+
+      // two resonances give it a voice without giving it a pitch
+      var peak1 = ac.createBiquadFilter();
+      peak1.type = 'peaking';
+      peak1.frequency.value = 8400;
+      peak1.Q.value = 1.1;
+      peak1.gain.value = 7;
+
+      var peak2 = ac.createBiquadFilter();
+      peak2.type = 'peaking';
+      peak2.frequency.value = 12500;
+      peak2.Q.value = 1.4;
+      peak2.gain.value = 4;
+
+      // real hats darken as they die away
+      var lp = ac.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(17000, t);
+      lp.frequency.exponentialRampToValueAtTime(8500, t + decay);
+
+      var gain = ac.createGain();
+      gain.gain.setValueAtTime(0.26 * v, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+
+      src.connect(hp);
+      hp.connect(peak1);
+      peak1.connect(peak2);
+      peak2.connect(lp);
+      lp.connect(gain);
+      gain.connect(beatBus(ac));
+      src.start(t);
+      src.stop(t + decay + 0.02);
+
+      hitMetal(ac, t, 0.035 * v, 300 * (0.97 + Math.random() * 0.06), 11000, 0.9, 8000, decay * 0.7);
     },
 
-    // ping plus wash
+    // a soft ping riding on a broad wash
     ride: function (ac, t, v) {
-      hitMetal(ac, t, 0.19 * v, 268, 5200, 0.7, 3000, 0.45 + v * 0.25);
-      hitTone(ac, t, 0.08 * v, 2450, 2450, 0.09, 'triangle');
-      hitNoise(ac, t, 0.07 * v, 'bandpass', 6800, 0.5, 0.3);
+      var decay = 0.5 + v * 0.35;
+      var src = ac.createBufferSource();
+      src.buffer = noiseBuffer(ac);
+      src.playbackRate.value = 0.85 + Math.random() * 0.3;
+
+      var hp = ac.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 2600;
+
+      var peak = ac.createBiquadFilter();
+      peak.type = 'peaking';
+      peak.frequency.value = 6200;
+      peak.Q.value = 0.9;
+      peak.gain.value = 6;
+
+      var lp = ac.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(13000, t);
+      lp.frequency.exponentialRampToValueAtTime(5200, t + decay);
+
+      var gain = ac.createGain();
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.2 * v, t + 0.004);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+
+      src.connect(hp);
+      hp.connect(peak);
+      peak.connect(lp);
+      lp.connect(gain);
+      gain.connect(beatBus(ac));
+      src.start(t);
+      src.stop(t + decay + 0.02);
+
+      // the stick on the bell, brief and quiet
+      hitTone(ac, t, 0.07 * v, 2450, 2380, 0.06, 'triangle');
+      hitMetal(ac, t, 0.03 * v, 268, 5200, 0.7, 3200, decay * 0.5);
     },
 
     rim: function (ac, t, v) {
@@ -889,6 +964,48 @@
       hitTone(ac, t, 0.35 * v, f, f, 0.045);
     }
   };
+
+  // ---- optional sample kit -------------------------------------------------
+  // Drop WAVs into audio/ with an audio/kit.json naming them and they replace
+  // the synthesised voices. Without that file nothing is fetched and the kit
+  // stays synthesised, which is how the app ships.
+  var kit = { asked: false, buffers: {} };
+
+  function loadKit(ac) {
+    if (kit.asked) return;
+    kit.asked = true;
+
+    fetch('audio/kit.json').then(function (res) {
+      if (!res.ok) throw new Error('no kit');
+      return res.json();
+    }).then(function (map) {
+      Object.keys(map).forEach(function (voice) {
+        if (!VOICES[voice]) return;
+        var file = String(map[voice]).replace(/[^\w.\-]/g, '');
+        if (!file) return;
+        fetch('audio/' + file).then(function (res) {
+          if (!res.ok) throw new Error('missing ' + file);
+          return res.arrayBuffer();
+        }).then(function (data) {
+          return new Promise(function (resolve, reject) {
+            ac.decodeAudioData(data, resolve, reject);
+          });
+        }).then(function (buffer) {
+          kit.buffers[voice] = buffer;
+        }).catch(function () { /* that voice stays synthesised */ });
+      });
+    }).catch(function () { /* no sample kit present */ });
+  }
+
+  function playSample(ac, voice, t, v) {
+    var src = ac.createBufferSource();
+    src.buffer = kit.buffers[voice];
+    var gain = ac.createGain();
+    gain.gain.value = v;
+    src.connect(gain);
+    gain.connect(beatBus(ac));
+    src.start(t);
+  }
 
   function sixteenthSeconds() { return 60 / settings.tempo / 4; }
 
@@ -909,12 +1026,13 @@
       if (!pattern) return;
       var velocity = MARK_VELOCITY[pattern.charAt(step)];
       if (!velocity) return;
+      var at = time;
       if (loose) {
-        velocity *= 0.88 + Math.random() * 0.24;
-        VOICES[voice](ac, time + (Math.random() - 0.5) * 0.006, Math.min(velocity, 1));
-      } else {
-        VOICES[voice](ac, time, velocity);
+        velocity = Math.min(velocity * (0.88 + Math.random() * 0.24), 1);
+        at += (Math.random() - 0.5) * 0.006;
       }
+      if (kit.buffers[voice]) playSample(ac, voice, at, velocity);
+      else VOICES[voice](ac, at, velocity);
     });
   }
 
@@ -935,6 +1053,7 @@
     if (beat.timer) return;
     var ac = ensureAudio();
     if (!ac) return;
+    loadKit(ac);
     beat.step = 0;
     beat.nextTime = ac.currentTime + 0.1;
     beat.timer = setInterval(beatLoop, 25);
