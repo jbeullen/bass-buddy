@@ -12,7 +12,7 @@ Switch modes with the tabs at the top.
 | --- | --- |
 | **Name Note** | A red dot appears somewhere on the neck — open string or fretted. Tap the matching note on the pad. |
 | **Find Note** | A note name is shown. Tap any position on the neck that plays it. |
-| **Explore** | Free practice — tap any position to reveal its note, or show the whole neck at once. With a scale selected it draws the scale, roots in red. |
+| **Explore** | Free practice — tap any position to hear it and reveal its note, or show the whole neck at once. With a scale selected it draws the scale, roots in red. |
 
 ### Sessions
 
@@ -20,6 +20,26 @@ Press **Start** to begin a session. It runs for 10 notes and the counter tracks
 your score (`3/10`). A correct answer turns green and moves on; a wrong one shows
 the right answer before continuing. After 10 notes the session ends and **Start**
 begins a new one. Your best result per mode is kept in `localStorage`.
+
+## Sound
+
+Notes are synthesised in the browser with the Web Audio API — no audio files, so
+there is nothing extra to download.
+
+- **Name Note** and **Find Note** play the note as the question appears. In Find
+  Note, where the question is a pitch rather than a position, it sounds at the
+  lowest position still in play. Tap the prompt to hear it again.
+- **Explore** plays whatever position you touch, and Find Note plays the position
+  you tap as well, so a wrong guess is audible as well as visible.
+- The speaker button in the top bar mutes and unmutes; the choice is remembered.
+
+Pitches are the real thing: standard tuning, open E at 41.2 Hz. A phone speaker
+cannot reproduce a fundamental that low, so the synth models a plucked string's
+full harmonic series — the upper partials are what carry the note through a small
+speaker, exactly as a real bass does.
+
+Mobile browsers only allow audio to start from a user gesture, which is why the
+first note you hear follows a tap on **Start** or on the neck.
 
 ## Practice settings
 

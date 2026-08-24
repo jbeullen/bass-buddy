@@ -85,7 +85,8 @@
     zones: ['low', 'mid', 'high'],
     dotsOnly: false,
     scale: 'none',
-    root: 0
+    root: 0,
+    sound: true
   };
 
   var el = {
@@ -103,6 +104,7 @@
     score: document.getElementById('score'),
     best: document.getElementById('best'),
     startBtn: document.getElementById('startBtn'),
+    soundBtn: document.getElementById('soundBtn'),
     gearBtn: document.getElementById('gearBtn'),
     sheet: document.getElementById('sheet'),
     zoneChips: document.getElementById('zoneChips'),
@@ -191,6 +193,136 @@
 
       el.pad.appendChild(btn);
     });
+  }
+
+  // ---------------------------------------------------------------- audio
+
+  // MIDI numbers for the open strings in standard tuning: E1 A1 D2 G2.
+  var STRING_MIDI = [28, 33, 38, 43];
+
+  // A plucked string is harmonically rich. Synthesising the upper partials is
+  // what makes a 41 Hz open E read as a note through a phone speaker, which
+  // cannot reproduce the fundamental at all.
+  var PARTIALS = [0, 1, 0.9, 0.75, 0.6, 0.42, 0.3, 0.22, 0.16, 0.11, 0.08, 0.05, 0.03];
+
+  var audio = { ctx: null, wave: null, voice: null, broken: false };
+
+  function midiAt(stringIndex, fret) { return STRING_MIDI[stringIndex] + fret; }
+
+  function midiToFreq(midi) { return 440 * Math.pow(2, (midi - 69) / 12); }
+
+  function ensureAudio() {
+    if (audio.broken) return null;
+    if (!audio.ctx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) { audio.broken = true; return null; }
+      try {
+        audio.ctx = new AC();
+        audio.wave = audio.ctx.createPeriodicWave(
+          new Float32Array(PARTIALS.length), new Float32Array(PARTIALS));
+      } catch (e) {
+        audio.broken = true;
+        return null;
+      }
+    }
+    // Mobile browsers hand back a suspended context until a user gesture.
+    if (audio.ctx.state === 'suspended') {
+      try { audio.ctx.resume(); } catch (e) { /* ignore */ }
+    }
+    return audio.ctx;
+  }
+
+  function stopVoice(now) {
+    var v = audio.voice;
+    if (!v) return;
+    audio.voice = null;
+    try {
+      v.gain.gain.cancelScheduledValues(now);
+      v.gain.gain.setValueAtTime(Math.max(v.gain.gain.value, 0.0001), now);
+      v.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+      v.osc.stop(now + 0.07);
+    } catch (e) { /* already finished */ }
+  }
+
+  function playMidi(midi) {
+    if (!settings.sound) return;
+    var ac = ensureAudio();
+    if (!ac) return;
+
+    var now = ac.currentTime;
+    stopVoice(now);
+
+    var osc = ac.createOscillator();
+    osc.setPeriodicWave(audio.wave);
+    osc.frequency.value = midiToFreq(midi);
+
+    // Sweeping the filter down is what gives the pluck its shape.
+    var filter = ac.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = 0.8;
+    filter.frequency.setValueAtTime(3600, now);
+    filter.frequency.exponentialRampToValueAtTime(600, now + 0.7);
+
+    var gain = ac.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.5, now + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.6);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(ac.destination);
+
+    osc.start(now);
+    osc.stop(now + 1.7);
+
+    audio.voice = { osc: osc, gain: gain };
+    osc.onended = function () {
+      if (audio.voice && audio.voice.osc === osc) audio.voice = null;
+    };
+  }
+
+  function playPosition(stringIndex, fret) { playMidi(midiAt(stringIndex, fret)); }
+
+  // In Find Note the question is a pitch class, so sound it at the lowest
+  // position still in play — the one a bassist would reach for first.
+  function lowestPositionFor(pitch) {
+    var best = null;
+    activePositions().forEach(function (pos) {
+      if (pos.pitch !== pitch) return;
+      var midi = midiAt(pos.string, pos.fret);
+      if (!best || midi < best.midi) best = { string: pos.string, fret: pos.fret, midi: midi };
+    });
+    return best;
+  }
+
+  // The prompt only invites a tap while there is a question to replay.
+  function updateReplayable() {
+    el.prompt.classList.toggle('is-replayable',
+      !!state.target && state.mode !== 'explore' && settings.sound);
+  }
+
+  function replayTarget() {
+    if (!state.target) return;
+    if (state.mode === 'name') playPosition(state.target.string, state.target.fret);
+    else if (state.mode === 'find' && state.target.midi != null) playMidi(state.target.midi);
+  }
+
+  function showIcon(svg, visible) {
+    if (visible) svg.removeAttribute('hidden');
+    else svg.setAttribute('hidden', '');
+  }
+
+  function setSound(on) {
+    settings.sound = on;
+    saveSettings();
+    el.soundBtn.setAttribute('aria-pressed', String(on));
+    // `hidden` is an HTMLElement property; these are SVG elements, so the
+    // content attribute has to be set directly.
+    showIcon(el.soundBtn.querySelector('.ico-on'), on);
+    showIcon(el.soundBtn.querySelector('.ico-off'), !on);
+    el.soundBtn.classList.toggle('is-off', !on);
+    updateReplayable();
+    if (!on && audio.ctx) stopVoice(audio.ctx.currentTime);
   }
 
   // ---------------------------------------------------------------- filters
@@ -311,7 +443,7 @@
   function clearBoard() {
     eachCell(function (cell) {
       cell.classList.remove('is-target', 'is-good', 'is-bad', 'is-reveal',
-                            'is-root', 'is-pulse');
+                            'is-root', 'is-pick', 'is-pulse');
       cell.firstChild.textContent = '';
     });
   }
@@ -380,6 +512,7 @@
     if (typeof saved.root === 'number' && saved.root >= 0 && saved.root < 12) {
       settings.root = saved.root;
     }
+    if (typeof saved.sound === 'boolean') settings.sound = saved.sound;
   }
 
   function saveSettings() {
@@ -475,6 +608,7 @@
     el.startBtn.textContent = 'Start';
     el.startBtn.classList.remove('is-running');
     el.pad.classList.add('is-idle');
+    updateReplayable();
 
     if (finished) {
       if (state.score > readBest()) writeBest(state.score);
@@ -500,13 +634,18 @@
       setMarker(cell, 'is-target');
       cell.classList.add('is-pulse');
       scrollIntoView(cell);
+      playPosition(state.target.string, state.target.fret);
       setPrompt('Which note is this?');
+      updateReplayable();
       el.pad.classList.remove('is-idle');
     } else if (state.mode === 'find') {
       var pitch = pickPitch();
       if (pitch === null) return endSession(false);
-      state.target = { pitch: pitch };
+      var ref = lowestPositionFor(pitch);
+      state.target = { pitch: pitch, midi: ref ? ref.midi : null };
+      if (ref) playMidi(ref.midi);
       setPrompt('Tap any', null, noteLabel(pitch));
+      updateReplayable();
     }
   }
 
@@ -563,6 +702,7 @@
 
     var cell = cells[stringIndex][fret];
     var pitch = noteAt(stringIndex, fret);
+    playPosition(stringIndex, fret);
 
     if (pitch === state.target.pitch) {
       state.locked = 'good';
@@ -615,16 +755,17 @@
   function exploreTap(stringIndex, fret) {
     var cell = cells[stringIndex][fret];
     var pitch = noteAt(stringIndex, fret);
+    playPosition(stringIndex, fret);
 
     if (!cell.classList.contains('is-root')) {
-      if (cell.classList.contains('is-target')) {
-        cell.classList.remove('is-target');
+      if (cell.classList.contains('is-pick')) {
+        cell.classList.remove('is-pick');
         if (state.showAll) setMarker(cell, 'is-reveal', NOTES[pitch].name);
         else cell.firstChild.textContent = '';
         return;
       }
       cell.classList.remove('is-reveal');
-      setMarker(cell, 'is-target', NOTES[pitch].name);
+      setMarker(cell, 'is-pick', NOTES[pitch].name);
     }
 
     setPrompt(noteLabel(pitch) + (isRoot(pitch) ? ' (root)' : '') + ' — ' +
@@ -661,6 +802,7 @@
 
     if (state.mode === 'explore') renderExplore();
     setPrompt(idleText());
+    updateReplayable();
     updateScrollHint();
   }
 
@@ -790,6 +932,14 @@
     setPrompt(idleText());
   });
 
+  el.soundBtn.addEventListener('click', function () {
+    setSound(!settings.sound);
+    if (settings.sound) replayTarget();
+  });
+
+  // Tapping the prompt plays the question again.
+  el.prompt.addEventListener('click', replayTarget);
+
   el.gearBtn.addEventListener('click', openSheet);
   el.filters.addEventListener('click', openSheet);
 
@@ -832,6 +982,7 @@
   buildPad();
   buildSettings();
   loadSettings();
+  setSound(settings.sound);
   syncSettingsUI();
   applyFilter();
   updateScore();
