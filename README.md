@@ -143,9 +143,10 @@ its bar, landing within a couple of milliseconds of beat one.
 - The neck runs top-to-bottom so it fits a phone in portrait. On short screens it
   scrolls, and the current question is always scrolled into view.
 - **Turn the phone sideways** and the board transposes: frets become columns
-  running left to right from the nut, strings become rows, and the whole neck
-  fits the screen with nothing to scroll. The chrome collapses to one line above
-  and the note pad to a single row of twelve below.
+  running left to right from the nut, strings become rows — lowest string along
+  the bottom, as tab and chord charts are written — and the whole neck fits the
+  screen with nothing to scroll. The chrome collapses to one line above and the
+  note pad to a single row of twelve below.
 
 ## Publishing to GitHub Pages
 
