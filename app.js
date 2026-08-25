@@ -1342,7 +1342,8 @@
     var reduce = window.matchMedia &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     try {
-      cell.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+      cell.scrollIntoView({ block: 'nearest', inline: 'nearest',
+                            behavior: reduce ? 'auto' : 'smooth' });
     } catch (e) {
       cell.scrollIntoView(false);
     }
